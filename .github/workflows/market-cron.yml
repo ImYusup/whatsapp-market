@@ -1,0 +1,16 @@
+name: Market Notification Cron
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+jobs:
+  market-cron:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Trigger market notification
+        run: |
+          curl -f -X GET \
+            "https://whatsapp-market.vercel.app/api/cron/market"
