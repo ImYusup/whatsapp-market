@@ -21,6 +21,7 @@ jobs:
       - name: Trigger XAU/USD market notification
         run: |
           curl -f -X GET \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             "https://whatsapp-market.vercel.app/api/cron/market/xau"
 
   btc-market-cron:
@@ -30,4 +31,5 @@ jobs:
       - name: Trigger BTC/USD market notification
         run: |
           curl -f -X GET \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             "https://whatsapp-market.vercel.app/api/cron/market/btc"
