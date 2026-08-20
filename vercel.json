@@ -2,11 +2,11 @@
   "crons": [
     {
       "path": "/api/cron/market/xau",
-      "schedule": "0,10,20,30,40,50 * * * *"
+      "schedule": "0 * * * *"
     },
     {
       "path": "/api/cron/market/btc",
-      "schedule": "4,14,24,34,44,54 * * * *"
+      "schedule": "0 * * * *"
     }
   ]
 }

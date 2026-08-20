@@ -2,15 +2,32 @@ name: Market Notification Cron
 
 on:
   schedule:
-    - cron: "*/15 * * * *"
+    # XAU/USD
+    # Menit 0, 10, 20, 30, 40, 50
+    - cron: "0,10,20,30,40,50 * * * *"
+
+    # BTC/USD
+    # Offset 4 menit
+    # Menit 4, 14, 24, 34, 44, 54
+    - cron: "4,14,24,34,44,54 * * * *"
+
   workflow_dispatch:
 
 jobs:
-  market-cron:
+  xau-market-cron:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Trigger market notification
+      - name: Trigger XAU/USD market notification
         run: |
           curl -f -X GET \
-            "https://whatsapp-market.vercel.app/api/cron/market"
+            "https://whatsapp-market.vercel.app/api/cron/market/xau"
+
+  btc-market-cron:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Trigger BTC/USD market notification
+        run: |
+          curl -f -X GET \
+            "https://whatsapp-market.vercel.app/api/cron/market/btc"
