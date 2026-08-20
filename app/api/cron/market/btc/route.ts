@@ -1,6 +1,7 @@
 // app/api/cron/market/btc/route.ts
 
 import { NextResponse } from "next/server";
+import { google } from "googleapis";
 import { generateSignal } from "@/lib/market/signal";
 import { twelveDataProvider } from "@/lib/market/providers/twelveData";
 import { Market } from "@/lib/market/markets";
@@ -8,7 +9,7 @@ import { Market } from "@/lib/market/markets";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const MARKET: Market = "BTC/USD";   // ← ini yang beda
+const MARKET: Market = "BTC/USD";
 
 function getCronSecret(): string {
   const secret = process.env.CRON_SECRET;
@@ -18,50 +19,59 @@ function getCronSecret(): string {
   return secret;
 }
 
-async function sendToAppsScript(
-  signal: Awaited<ReturnType<typeof generateSignal>>
-) {
-  const url = process.env.APPS_SCRIPT_WEBHOOK_URL;
-  const secret = process.env.APPS_SCRIPT_WEBHOOK_SECRET;
+function getSheetsClient() {
+  const email = process.env.GOOGLE_CLIENT_EMAIL;
+  const key = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, "\n");
+  const sheetId = process.env.GOOGLE_SHEET_ID;
 
-  if (!url) {
-    throw new Error("APPS_SCRIPT_WEBHOOK_URL belum diset.");
-  }
-  if (!secret) {
-    throw new Error("APPS_SCRIPT_WEBHOOK_SECRET belum diset.");
+  if (!email || !key || !sheetId) {
+    throw new Error("Google Sheets environment variables belum lengkap.");
   }
 
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      secret,
-      action: "MARKET_SIGNAL",
-      signal,
-    }),
-    cache: "no-store",
+  const auth = new google.auth.JWT({
+    email,
+    key,
+    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
   });
 
-  const body = await response.text();
+  return {
+    sheets: google.sheets({ version: "v4", auth }),
+    sheetId,
+  };
+}
 
-  if (!response.ok) {
-    throw new Error(`Apps Script HTTP ${response.status}: ${body}`);
-  }
+async function enqueueMarketSignal(
+  signal: Awaited<ReturnType<typeof generateSignal>>
+) {
+  const { sheets, sheetId } = getSheetsClient();
 
-  let data;
-  try {
-    data = JSON.parse(body);
-  } catch {
-    throw new Error(`Apps Script invalid JSON: ${body}`);
-  }
+  const queueId = `QUEUE_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const now = new Date().toISOString();
 
-  if (!data.ok) {
-    throw new Error(`Apps Script rejected: ${body}`);
-  }
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: sheetId,
+    range: "Market_Queue!A:G",
+    valueInputOption: "USER_ENTERED",
+    insertDataOption: "INSERT_ROWS",
+    requestBody: {
+      values: [
+        [
+          queueId,                 // A: queue_id
+          signal.market,          // B: market
+          JSON.stringify(signal), // C: signal_json
+          "PENDING",              // D: status
+          now,                    // E: created_at
+          "",                     // F: processed_at
+          "",                     // G: error
+        ],
+      ],
+    },
+  });
 
-  return data;
+  return {
+    queueId,
+    market: signal.market,
+  };
 }
 
 export async function GET(request: Request) {
@@ -82,15 +92,15 @@ export async function GET(request: Request) {
 
     console.log("🟡 BTC SIGNAL:", JSON.stringify(signal));
 
-    const whatsapp = await sendToAppsScript(signal);
+    const queueResult = await enqueueMarketSignal(signal);
 
-    console.log("🟡 BTC WHATSAPP RESULT:", whatsapp);
+    console.log("🟡 BTC QUEUED:", queueResult);
 
     return NextResponse.json({
       ok: true,
       market: MARKET,
       signal,
-      whatsapp,
+      queue: queueResult,
     });
   } catch (error) {
     console.error("❌ BTC CRON ERROR:", error);
