@@ -2,29 +2,32 @@ name: Market Notification Cron
 
 on:
   schedule:
-    - cron: "0,10,20,30,40,50 * * * *"
-    - cron: "4,14,24,34,44,54 * * * *"
+    # Generate signal (XAU & BTC)
+    - cron: "0,10,20,30,40,50 * * * *"   # menit 0,10,20...
+    - cron: "4,14,24,34,44,54 * * * *"   # menit 4,14,24... (BTC)
+
+    # Process queue (setelah signal masuk)
+    - cron: "2,12,22,32,42,52 * * * *"   # 2 menit setelah XAU
+    - cron: "6,16,26,36,46,56 * * * *"   # 2 menit setelah BTC
 
   workflow_dispatch:
 
 jobs:
+  # ==================== XAU ====================
   xau-market-cron:
     runs-on: ubuntu-latest
-
     steps:
       - name: Check XAU cron secret
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
           if [ -z "$CRON_SECRET" ]; then
-            echo "❌ GitHub CRON_SECRET KOSONG / TIDAK TERBACA"
+            echo "❌ GitHub CRON_SECRET KOSONG"
             exit 1
           fi
+          echo "✅ CRON_SECRET tersedia"
 
-          echo "✅ GitHub CRON_SECRET tersedia"
-          echo "Secret length: ${#CRON_SECRET}"
-
-      - name: Trigger XAU/USD market notification
+      - name: Trigger XAU/USD
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
@@ -32,26 +35,47 @@ jobs:
             -H "Authorization: Bearer $CRON_SECRET" \
             "https://whatsapp-market.vercel.app/api/cron/market/xau"
 
+  # ==================== BTC ====================
   btc-market-cron:
     runs-on: ubuntu-latest
-
     steps:
       - name: Check BTC cron secret
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
           if [ -z "$CRON_SECRET" ]; then
-            echo "❌ GitHub CRON_SECRET KOSONG / TIDAK TERBACA"
+            echo "❌ GitHub CRON_SECRET KOSONG"
             exit 1
           fi
+          echo "✅ CRON_SECRET tersedia"
 
-          echo "✅ GitHub CRON_SECRET tersedia"
-          echo "Secret length: ${#CRON_SECRET}"
-
-      - name: Trigger BTC/USD market notification
+      - name: Trigger BTC/USD
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
           curl -f -X GET \
             -H "Authorization: Bearer $CRON_SECRET" \
             "https://whatsapp-market.vercel.app/api/cron/market/btc"
+
+  # ==================== PROCESS QUEUE ====================
+  process-queue:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Process Market Queue
+        env:
+          APPS_SCRIPT_WEBHOOK_URL: ${{ secrets.APPS_SCRIPT_WEBHOOK_URL }}
+          APPS_SCRIPT_WEBHOOK_SECRET: ${{ secrets.APPS_SCRIPT_WEBHOOK_SECRET }}
+        run: |
+          if [ -z "$APPS_SCRIPT_WEBHOOK_URL" ] || [ -z "$APPS_SCRIPT_WEBHOOK_SECRET" ]; then
+            echo "❌ APPS_SCRIPT secrets belum di-set"
+            exit 1
+          fi
+
+          echo "🔄 Trigger PROCESS_QUEUE..."
+
+          curl -f -X POST \
+            -H "Content-Type: application/json" \
+            -d "{\"secret\":\"$APPS_SCRIPT_WEBHOOK_SECRET\",\"action\":\"PROCESS_QUEUE\"}" \
+            "$APPS_SCRIPT_WEBHOOK_URL"
+
+          echo "✅ PROCESS_QUEUE triggered"
