@@ -9,11 +9,11 @@ const TWELVE_DATA_URL =
 function getApiKey(): string {
 
   const key =
-    process.env.TWELVE_DATA_API_KEY;
+    process.env.TWELVE_API_KEY;
 
   if (!key) {
     throw new Error(
-      "TWELVE_DATA_API_KEY belum diset."
+      "TWELVE_API_KEY belum diset."
     );
   }
 
