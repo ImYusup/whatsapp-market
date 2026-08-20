@@ -2,13 +2,7 @@ name: Market Notification Cron
 
 on:
   schedule:
-    # XAU/USD
-    # Menit 0, 10, 20, 30, 40, 50
     - cron: "0,10,20,30,40,50 * * * *"
-
-    # BTC/USD
-    # Offset 4 menit
-    # Menit 4, 14, 24, 34, 44, 54
     - cron: "4,14,24,34,44,54 * * * *"
 
   workflow_dispatch:
@@ -18,18 +12,46 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Check XAU cron secret
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "❌ GitHub CRON_SECRET KOSONG / TIDAK TERBACA"
+            exit 1
+          fi
+
+          echo "✅ GitHub CRON_SECRET tersedia"
+          echo "Secret length: ${#CRON_SECRET}"
+
       - name: Trigger XAU/USD market notification
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
           curl -f -X GET \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Authorization: Bearer $CRON_SECRET" \
             "https://whatsapp-market.vercel.app/api/cron/market/xau"
 
   btc-market-cron:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Check BTC cron secret
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "❌ GitHub CRON_SECRET KOSONG / TIDAK TERBACA"
+            exit 1
+          fi
+
+          echo "✅ GitHub CRON_SECRET tersedia"
+          echo "Secret length: ${#CRON_SECRET}"
+
       - name: Trigger BTC/USD market notification
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
           curl -f -X GET \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Authorization: Bearer $CRON_SECRET" \
             "https://whatsapp-market.vercel.app/api/cron/market/btc"
