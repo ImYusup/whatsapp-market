@@ -1,9 +1,10 @@
-// src/lib/market/providers/index.ts
-
 import { goldApi } from "./goldApi";
-import { twelveData } from "./twelveData";
+import { twelveDataProvider } from "./twelveData";
 
 export const MARKET_PROVIDERS = {
   gold: goldApi,
-  twelveData: twelveData,
+  twelveData: twelveDataProvider,
 } as const;
+
+export type MarketProviderName =
+  keyof typeof MARKET_PROVIDERS;
