@@ -84,12 +84,6 @@ function analyzeTrend(
   const recent =
     candles[candles.length - 1];
 
-  /*
-   * Gunakan beberapa candle terakhir.
-   *
-   * Ini lebih stabil daripada hanya membandingkan
-   * candle terakhir dengan candle ke-5.
-   */
   const previous =
     candles[candles.length - 6];
 
@@ -102,10 +96,6 @@ function analyzeTrend(
       ? (difference / previous.close) * 100
       : 0;
 
-  // ==========================================================
-  // STRONG BUY
-  // ==========================================================
-
   if (percentage >= 0.15) {
     return {
       timeframe,
@@ -113,10 +103,6 @@ function analyzeTrend(
       score: 2,
     };
   }
-
-  // ==========================================================
-  // BUY
-  // ==========================================================
 
   if (percentage >= 0.05) {
     return {
@@ -126,10 +112,6 @@ function analyzeTrend(
     };
   }
 
-  // ==========================================================
-  // STRONG SELL
-  // ==========================================================
-
   if (percentage <= -0.15) {
     return {
       timeframe,
@@ -138,10 +120,6 @@ function analyzeTrend(
     };
   }
 
-  // ==========================================================
-  // SELL
-  // ==========================================================
-
   if (percentage <= -0.05) {
     return {
       timeframe,
@@ -149,10 +127,6 @@ function analyzeTrend(
       score: -1,
     };
   }
-
-  // ==========================================================
-  // WAIT
-  // ==========================================================
 
   return {
     timeframe,
@@ -302,9 +276,13 @@ function clusterLevels(
       differencePercent <=
       tolerancePercent
     ) {
+
       lastCluster.push(level);
+
     } else {
+
       clusters.push([level]);
+
     }
   }
 
@@ -339,12 +317,14 @@ function calculateSupportResistance(
     candles.length < 10 ||
     !Number.isFinite(currentPrice)
   ) {
+
     return {
       support: null,
       resistance: null,
       supports: [],
       resistances: [],
     };
+
   }
 
   const pivotLows =
@@ -402,7 +382,7 @@ function calculateSupportResistance(
 }
 
 // ============================================================
-// OVERALL DIRECTION
+// OVERALL
 // ============================================================
 
 function calculateOverall(
@@ -443,35 +423,11 @@ function calculateConfidence(
   analyses: TimeframeAnalysis[]
 ): number {
 
-  /*
-   * ==========================================================
-   * CONFIDENCE PHILOSOPHY
-   * ==========================================================
-   *
-   * Confidence = seberapa yakin sistem membaca kondisi market.
-   *
-   * BUKAN:
-   *
-   * "95% pasti profit"
-   *
-   * Threshold:
-   *
-   * < 50  = WAIT & SEE
-   * 50-69 = CAUTIOUS
-   * >= 70 = CONFIRMED
-   *
-   * ==========================================================
-   */
-
   const weights = {
     "15M": 0.25,
     "30M": 0.30,
     "1H": 0.45,
   };
-
-  // ==========================================================
-  // 1. BASE STRENGTH
-  // ==========================================================
 
   let weightedStrength = 0;
 
@@ -486,16 +442,8 @@ function calculateConfidence(
       ];
   }
 
-  /*
-   * Maximum weighted strength = 2
-   */
-
   let confidence =
     (weightedStrength / 2) * 100;
-
-  // ==========================================================
-  // 2. DETECT DIRECTION
-  // ==========================================================
 
   const positive =
     analyses.filter(
@@ -515,16 +463,6 @@ function calculateConfidence(
         item.score === 0
     ).length;
 
-  // ==========================================================
-  // 3. TIMEFRAME AGREEMENT
-  // ==========================================================
-
-  /*
-   * 3 timeframe satu arah:
-   *
-   * sangat konsisten
-   */
-
   if (
     positive === 3 ||
     negative === 3
@@ -537,22 +475,9 @@ function calculateConfidence(
     negative === 2
   ) {
 
-    /*
-     * 2 timeframe satu arah
-     * masih cukup kuat.
-     */
-
     confidence += 6;
+
   }
-
-  // ==========================================================
-  // 4. CONFLICT PENALTY
-  // ==========================================================
-
-  /*
-   * Kalau ada BUY dan SELL bersamaan,
-   * confidence harus turun.
-   */
 
   if (
     positive > 0 &&
@@ -560,12 +485,6 @@ function calculateConfidence(
   ) {
 
     confidence -= 18;
-
-    /*
-     * Kalau 1H berlawanan dengan mayoritas
-     * timeframe pendek, conflict lebih serius
-     * karena 1H memiliki bobot terbesar.
-     */
 
     const oneHour =
       analyses.find(
@@ -607,26 +526,8 @@ function calculateConfidence(
     }
   }
 
-  // ==========================================================
-  // 5. WAIT PENALTY
-  // ==========================================================
-
-  /*
-   * WAIT berarti timeframe tersebut
-   * belum memberikan konfirmasi.
-   */
-
   confidence -=
     wait * 8;
-
-  // ==========================================================
-  // 6. STRONG SIGNAL BONUS
-  // ==========================================================
-
-  /*
-   * Strong signal boleh menaikkan confidence,
-   * tapi tidak boleh mengalahkan conflict.
-   */
 
   const strongCount =
     analyses.filter(
@@ -638,10 +539,6 @@ function calculateConfidence(
 
   confidence +=
     strongCount * 3;
-
-  // ==========================================================
-  // 7. HIGHER TIMEFRAME CONFIRMATION
-  // ==========================================================
 
   const oneHour =
     analyses.find(
@@ -656,25 +553,9 @@ function calculateConfidence(
     ) === 2
   ) {
 
-    /*
-     * 1H strong signal adalah evidence penting.
-     */
-
     confidence += 4;
+
   }
-
-  // ==========================================================
-  // 8. FINAL RANGE
-  // ==========================================================
-
-  /*
-   * Maximum display confidence:
-   *
-   * 95
-   *
-   * Supaya angka tidak terlihat seperti
-   * probabilitas pasti profit.
-   */
 
   return Math.max(
     0,
@@ -701,13 +582,23 @@ export async function generateSignal(
   );
 
   // ==========================================================
-  // CURRENT PRICE
+  // PRICE
   // ==========================================================
 
   const price =
     await provider.getCurrentPrice(
       market
     );
+
+  if (
+    !Number.isFinite(price)
+  ) {
+
+    throw new Error(
+      `${market} current price invalid`
+    );
+
+  }
 
   console.log(
     `${market} current price:`,
@@ -718,59 +609,54 @@ export async function generateSignal(
   // OHLC
   // ==========================================================
 
-  let candles15M: Candle[] = [];
-  let candles30M: Candle[] = [];
-  let candles1H: Candle[] = [];
+  const [
+    candles15M,
+    candles30M,
+    candles1H,
+  ] = await Promise.all([
 
-  try {
+    provider.getCandles(
+      market,
+      "15min"
+    ),
 
-    [
-      candles15M,
-      candles30M,
-      candles1H,
-    ] = await Promise.all([
+    provider.getCandles(
+      market,
+      "30min"
+    ),
 
-      provider.getCandles(
-        market,
-        "15min"
-      ),
+    provider.getCandles(
+      market,
+      "1h"
+    ),
 
-      provider.getCandles(
-        market,
-        "30min"
-      ),
+  ]);
 
-      provider.getCandles(
-        market,
-        "1h"
-      ),
-    ]);
+  if (
+    candles15M.length < 6 ||
+    candles30M.length < 6 ||
+    candles1H.length < 10
+  ) {
 
-    console.log(
-      `${market} OHLC loaded`,
-      {
-        "15M":
-          candles15M.length,
-
-        "30M":
-          candles30M.length,
-
-        "1H":
-          candles1H.length,
-      }
+    throw new Error(
+      `${market} insufficient OHLC data`
     );
 
-  } catch (error) {
-
-    console.error(
-      `${market} OHLC ERROR:`,
-      error
-    );
-
-    candles15M = [];
-    candles30M = [];
-    candles1H = [];
   }
+
+  console.log(
+    `${market} OHLC loaded`,
+    {
+      "15M":
+        candles15M.length,
+
+      "30M":
+        candles30M.length,
+
+      "1H":
+        candles1H.length,
+    }
+  );
 
   // ==========================================================
   // ANALYSIS
@@ -834,29 +720,7 @@ export async function generateSignal(
     );
 
   // ==========================================================
-  // LOG
-  // ==========================================================
-
-  console.log(
-    `[${market}] SIGNAL`,
-    {
-      "15M":
-        analysis15M.direction,
-
-      "30M":
-        analysis30M.direction,
-
-      "1H":
-        analysis1H.direction,
-
-      overall,
-
-      confidence,
-    }
-  );
-
-  // ==========================================================
-  // RESPONSE
+  // RESULT
   // ==========================================================
 
   return {
@@ -878,6 +742,7 @@ export async function generateSignal(
 
       "1H":
         analysis1H,
+
     },
 
     overall,
@@ -896,9 +761,7 @@ export async function generateSignal(
       supports
         .map(
           (level) =>
-            roundPrice(
-              level
-            )
+            roundPrice(level)
         )
         .filter(
           (
@@ -911,9 +774,7 @@ export async function generateSignal(
       resistances
         .map(
           (level) =>
-            roundPrice(
-              level
-            )
+            roundPrice(level)
         )
         .filter(
           (
@@ -926,5 +787,6 @@ export async function generateSignal(
 
     generatedAt:
       new Date().toISOString(),
+
   };
 }
