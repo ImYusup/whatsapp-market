@@ -1,114 +1,129 @@
 // app/api/cron/market/btc/route.ts
-
 import { NextResponse } from "next/server";
-import { google } from "googleapis";
 import { generateSignal } from "@/lib/market/signal";
 import { twelveDataProvider } from "@/lib/market/providers/twelveData";
 import { Market } from "@/lib/market/markets";
+import { sendTelegramSignal } from "@/lib/telegram/send";
+import { formatSignalMessage } from "@/lib/telegram/formatSignal";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const MARKET: Market = "BTC/USD";
+const CRYPTO_MARKETS: Market[] = [
+  "BTC/USD",
+  "ETH/USD",
+  "SOL/USD",
+  "BNB/USD",
+];
 
 function getCronSecret(): string {
   const secret = process.env.CRON_SECRET;
-  if (!secret) {
-    throw new Error("CRON_SECRET belum diset.");
-  }
+  if (!secret) throw new Error("CRON_SECRET belum diset.");
   return secret;
 }
 
-function getSheetsClient() {
-  const email = process.env.GOOGLE_CLIENT_EMAIL;
-  const key = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, "\n");
-  const sheetId = process.env.GOOGLE_SHEET_ID;
-
-  if (!email || !key || !sheetId) {
-    throw new Error("Google Sheets environment variables belum lengkap.");
-  }
-
-  const auth = new google.auth.JWT({
-    email,
-    key,
-    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
-  });
-
-  return {
-    sheets: google.sheets({ version: "v4", auth }),
-    sheetId,
-  };
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function enqueueMarketSignal(
-  signal: Awaited<ReturnType<typeof generateSignal>>
-) {
-  const { sheets, sheetId } = getSheetsClient();
+async function generateSignalWithRetry(market: Market, maxRetries = 3) {
+  let lastError: unknown;
 
-  const queueId = `QUEUE_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-  const now = new Date().toISOString();
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await generateSignal(market, twelveDataProvider);
+    } catch (error) {
+      lastError = error;
+      const msg = error instanceof Error ? error.message : String(error);
 
-  await sheets.spreadsheets.values.append({
-    spreadsheetId: sheetId,
-    range: "Market_Queue!A:G",
-    valueInputOption: "USER_ENTERED",
-    insertDataOption: "INSERT_ROWS",
-    requestBody: {
-      values: [
-        [
-          queueId,                 // A: queue_id
-          signal.market,          // B: market
-          JSON.stringify(signal), // C: signal_json
-          "PENDING",              // D: status
-          now,                    // E: created_at
-          "",                     // F: processed_at
-          "",                     // G: error
-        ],
-      ],
-    },
-  });
-
-  return {
-    queueId,
-    market: signal.market,
-  };
+      if (msg.includes("429") || msg.includes("run out of API credits")) {
+        const waitSec = 25 + attempt * 10;
+        console.log(`⏳ ${market} rate limit (attempt ${attempt}). Tunggu ${waitSec}s...`);
+        await sleep(waitSec * 1000);
+        continue;
+      }
+      throw error;
+    }
+  }
+  throw lastError;
 }
 
 export async function GET(request: Request) {
   try {
     const authorization = request.headers.get("authorization");
-
     if (authorization !== `Bearer ${getCronSecret()}`) {
-      return NextResponse.json(
-        { ok: false, error: "Unauthorized" },
-        { status: 401 }
-      );
+      return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
     }
 
     console.log("==========================================");
-    console.log("🟡 BTC/USD CRON START");
+    console.log("🟡 CRYPTOCURRENCY CRON START → TELEGRAM");
+    console.log("📊 MARKETS:", CRYPTO_MARKETS.join(", "));
+    console.log("==========================================");
 
-    const signal = await generateSignal(MARKET, twelveDataProvider);
+    const results: {
+      market: string;
+      ok: boolean;
+      signal?: unknown;
+      telegram?: boolean;
+      error?: string;
+    }[] = [];
 
-    console.log("🟡 BTC SIGNAL:", JSON.stringify(signal));
+    for (let i = 0; i < CRYPTO_MARKETS.length; i++) {
+      const market = CRYPTO_MARKETS[i];
 
-    const queueResult = await enqueueMarketSignal(signal);
+      try {
+        console.log(`\n🟡 Processing ${market}...`);
 
-    console.log("🟡 BTC QUEUED:", queueResult);
+        const signal = await generateSignalWithRetry(market);
+        console.log(`🟡 ${market} SIGNAL OK`);
+
+        const message = formatSignalMessage(signal);
+        await sendTelegramSignal(message);
+
+        console.log(`✅ ${market} SENT TO PRIVATE CHANNEL`);
+
+        results.push({
+          market,
+          ok: true,
+          signal,
+          telegram: true,
+        });
+      } catch (error) {
+        console.error(`❌ ${market} ERROR:`, error);
+        results.push({
+          market,
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+
+      // Delay antar market (aman untuk free tier)
+      if (i < CRYPTO_MARKETS.length - 1) {
+        console.log(`⏳ Waiting 20 seconds...`);
+        await sleep(20_000);
+      }
+    }
+
+    const successCount = results.filter((r) => r.ok).length;
+    const failedCount = results.filter((r) => !r.ok).length;
+
+    console.log("\n==========================================");
+    console.log(`✅ SUCCESS: ${successCount} | ❌ FAILED: ${failedCount}`);
+    console.log("==========================================");
 
     return NextResponse.json({
       ok: true,
-      market: MARKET,
-      signal,
-      queue: queueResult,
+      category: "cryptocurrency",
+      markets: CRYPTO_MARKETS,
+      success: successCount,
+      failed: failedCount,
+      results,
     });
   } catch (error) {
-    console.error("❌ BTC CRON ERROR:", error);
-
+    console.error("❌ CRON ERROR:", error);
     return NextResponse.json(
       {
         ok: false,
-        market: MARKET,
         error: error instanceof Error ? error.message : String(error),
       },
       { status: 500 }

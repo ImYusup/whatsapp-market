@@ -1,10 +1,10 @@
 // app/api/cron/market/xau/route.ts
-
 import { NextResponse } from "next/server";
-import { google } from "googleapis";
 import { generateSignal } from "@/lib/market/signal";
-import { twelveDataProvider } from "@/lib/market/providers/twelveData";
+import { goldApi } from "@/lib/market/providers/goldApi";
 import { Market } from "@/lib/market/markets";
+import { sendTelegramSignal } from "@/lib/telegram/send";
+import { formatSignalMessage } from "@/lib/telegram/formatSignal";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -13,98 +13,113 @@ const MARKET: Market = "XAU/USD";
 
 function getCronSecret(): string {
   const secret = process.env.CRON_SECRET;
-  if (!secret) {
-    throw new Error("CRON_SECRET belum diset.");
-  }
+  if (!secret) throw new Error("CRON_SECRET belum diset.");
   return secret;
 }
 
-function getSheetsClient() {
-  const email = process.env.GOOGLE_CLIENT_EMAIL;
-  const key = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, "\n");
-  const sheetId = process.env.GOOGLE_SHEET_ID;
-
-  if (!email || !key || !sheetId) {
-    throw new Error("Google Sheets environment variables belum lengkap.");
-  }
-
-  const auth = new google.auth.JWT({
-    email,
-    key,
-    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
-  });
-
-  return {
-    sheets: google.sheets({ version: "v4", auth }),
-    sheetId,
-  };
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function enqueueMarketSignal(
-  signal: Awaited<ReturnType<typeof generateSignal>>
-) {
-  const { sheets, sheetId } = getSheetsClient();
-
-  const queueId = `QUEUE_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-  const now = new Date().toISOString();
-
-  await sheets.spreadsheets.values.append({
-    spreadsheetId: sheetId,
-    range: "Market_Queue!A:G",
-    valueInputOption: "USER_ENTERED",
-    insertDataOption: "INSERT_ROWS",
-    requestBody: {
-      values: [
-        [
-          queueId,                 // A: queue_id
-          signal.market,          // B: market
-          JSON.stringify(signal), // C: signal_json
-          "PENDING",              // D: status
-          now,                    // E: created_at
-          "",                     // F: processed_at
-          "",                     // G: error
-        ],
-      ],
-    },
+/** Cek weekend di timezone Jakarta */
+function isWeekend(): boolean {
+  const day = new Date().toLocaleString("en-US", {
+    timeZone: "Asia/Jakarta",
+    weekday: "short",
   });
+  return day === "Sat" || day === "Sun";
+}
 
-  return {
-    queueId,
-    market: signal.market,
-  };
+async function generateSignalWithRetry(maxRetries = 3) {
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await generateSignal(MARKET, goldApi);
+    } catch (error) {
+      lastError = error;
+      const msg = error instanceof Error ? error.message : String(error);
+
+      // Rate limit Twelve Data
+      if (msg.includes("429") || msg.includes("run out of API credits") || msg.includes("All Twelve Data keys failed")) {
+        const waitSec = 25 + attempt * 10;
+        console.log(`⏳ XAU rate limit (attempt ${attempt}/${maxRetries}). Tunggu ${waitSec}s...`);
+        await sleep(waitSec * 1000);
+        continue;
+      }
+
+      // Market closed / no data
+      if (
+        msg.toLowerCase().includes("market is closed") ||
+        msg.toLowerCase().includes("no data") ||
+        msg.toLowerCase().includes("insufficient") ||
+        msg.toLowerCase().includes("not available")
+      ) {
+        throw new Error("MARKET_CLOSED");
+      }
+
+      throw error;
+    }
+  }
+
+  throw lastError;
 }
 
 export async function GET(request: Request) {
   try {
     const authorization = request.headers.get("authorization");
-
     if (authorization !== `Bearer ${getCronSecret()}`) {
-      return NextResponse.json(
-        { ok: false, error: "Unauthorized" },
-        { status: 401 }
-      );
+      return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Skip total di weekend
+    if (isWeekend()) {
+      console.log("⏸️ XAU cron skipped — weekend (market closed)");
+      return NextResponse.json({
+        ok: true,
+        market: MARKET,
+        skipped: true,
+        reason: "weekend",
+        message: "XAU market closed on weekend",
+      });
     }
 
     console.log("==========================================");
-    console.log("🟡 XAU/USD CRON START");
+    console.log("🟠 XAU/USD CRON START → TELEGRAM");
+    console.log("==========================================");
 
-    const signal = await generateSignal(MARKET, twelveDataProvider);
+    try {
+      const signal = await generateSignalWithRetry();
+      console.log("🟠 XAU SIGNAL OK");
 
-    console.log("🟡 XAU SIGNAL:", JSON.stringify(signal));
+      const message = formatSignalMessage(signal);
+      await sendTelegramSignal(message);
 
-    const queueResult = await enqueueMarketSignal(signal);
+      console.log("✅ XAU SENT TO PRIVATE CHANNEL");
 
-    console.log("🟡 XAU QUEUED:", queueResult);
+      return NextResponse.json({
+        ok: true,
+        market: MARKET,
+        signal,
+        telegram: true,
+      });
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
 
-    return NextResponse.json({
-      ok: true,
-      market: MARKET,
-      signal,
-      queue: queueResult,
-    });
+      if (msg === "MARKET_CLOSED") {
+        console.log("⏸️ XAU skipped — market closed");
+        return NextResponse.json({
+          ok: true,
+          market: MARKET,
+          skipped: true,
+          reason: "market_closed",
+        });
+      }
+
+      throw error;
+    }
   } catch (error) {
     console.error("❌ XAU CRON ERROR:", error);
-
     return NextResponse.json(
       {
         ok: false,

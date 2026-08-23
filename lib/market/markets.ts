@@ -31,6 +31,9 @@ export const MARKETS = [
 export const NOTIFICATION_MARKETS = [
   "XAU/USD",
   "BTC/USD",
+  "ETH/USD",
+  "SOL/USD",
+  "BNB/USD",
 ] as const;
 
 // ============================================================
