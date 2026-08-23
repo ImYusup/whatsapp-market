@@ -31,7 +31,6 @@ const SUBSCRIPTION_PAYMENT_MESSAGE = [
   "To receive *Gold (XAU/USD)* and *Cryptocurrency* market signals, please subscribe first.",
   "",
   "💳 *PLEASE COMPLETE PAYMENT*",
-  "",
   "1. BCA – 7390748013 : Yusup Juniadi",
   "2. BRI – 205801004408532 : Yusup Juniadi",
   "3. SeaBank – 901356079886 : Yusup Juniadi",
@@ -43,8 +42,8 @@ const SUBSCRIPTION_PAYMENT_MESSAGE = [
   "",
   "After payment is confirmed, your account will be activated and you will receive a private Telegram channel invite.",
   "",
-  "💻 At WebBotPro, we provide digital solutions to help your business grow.\n",
-  "🌐 webbotpro.com\n",
+  "💻 At WebBotPro, we provide digital solutions to help your business grow.",
+  "🌐 webbotpro.com",
 ].join("\n");
 
 // ============================================================
@@ -598,8 +597,8 @@ async function handleSubscriptionCommand(
         "• RENEW",
         "• SUBSCRIBE",
         "",
-        "💻 At WebBotPro, we provide digital solutions to help your business grow.\n",
-        "🌐 webbotpro.com\n",
+        "💻 At WebBotPro, we provide digital solutions to help your business grow.",
+        "🌐 webbotpro.com",
         "📲 WhatsApp: wa.me/628597519508"
       ].join("\n")
     );
