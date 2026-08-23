@@ -42,6 +42,9 @@ const SUBSCRIPTION_PAYMENT_MESSAGE = [
   "https://wa.me/6285975149508",
   "",
   "After payment is confirmed, your account will be activated and you will receive a private Telegram channel invite.",
+  "",
+  "💻 At WebBotPro, we provide digital solutions to help your business grow.\n",
+  "🌐 webbotpro.com\n",
 ].join("\n");
 
 // ============================================================
@@ -594,6 +597,10 @@ async function handleSubscriptionCommand(
         "• STATUS",
         "• RENEW",
         "• SUBSCRIBE",
+        "",
+        "💻 At WebBotPro, we provide digital solutions to help your business grow.\n",
+        "🌐 webbotpro.com\n",
+        "📲 WhatsApp: wa.me/628597519508"
       ].join("\n")
     );
   }
@@ -664,7 +671,7 @@ async function handleSubscriptionCommand(
   if (action === "RENEW") {
     return sendText(phone, SUBSCRIPTION_PAYMENT_MESSAGE);
   }
-  
+
   // ==========================================================
   // FALLBACK
   // ==========================================================
