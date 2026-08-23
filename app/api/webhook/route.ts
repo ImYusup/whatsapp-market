@@ -659,41 +659,12 @@ async function handleSubscriptionCommand(
   // ==========================================================
   // RENEW
   // ==========================================================
+  // User only gets payment instructions.
+  // Admin extends subscription + sends invite manually after payment.
   if (action === "RENEW") {
-    if (subscriptionStatus.action === "NOT_SUBSCRIBED") {
-      return sendText(phone, SUBSCRIPTION_PAYMENT_MESSAGE);
-    }
-
-    const result = await renew(phone);
-
-    console.log("RENEW RESULT:", JSON.stringify(result, null, 2));
-
-    if (
-      result.action === "SUBSCRIBER_NOT_FOUND" ||
-      result.action === "SUBSCRIPTION_NOT_FOUND"
-    ) {
-      return sendText(phone, SUBSCRIPTION_PAYMENT_MESSAGE);
-    }
-
-    if (result.action === "RENEWED" && result.subscription) {
-      // Text only (no template)
-      return sendRenewedText({
-        phone,
-        name: result.subscriber?.name || displayName,
-        expiredAt: result.subscription.expiredAt,
-      });
-    }
-
-    return sendText(
-      phone,
-      [
-        "❌ Failed to renew subscription.",
-        "",
-        "Please try again later.",
-      ].join("\n")
-    );
+    return sendText(phone, SUBSCRIPTION_PAYMENT_MESSAGE);
   }
-
+  
   // ==========================================================
   // FALLBACK
   // ==========================================================
