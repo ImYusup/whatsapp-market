@@ -12,8 +12,8 @@ export async function generateInviteLink(options?: {
     throw new Error("TELEGRAM_BOT_TOKEN or TELEGRAM_CHANNEL_ID is missing");
   }
 
-  const memberLimit = options?.memberLimit ?? 1; // single-use
-  const expireHours = options?.expireHours ?? 24; // berlaku 24 jam
+  const memberLimit = options?.memberLimit ?? 1;
+  const expireHours = options?.expireHours ?? 48; // 48 hours (match message)
   const name = options?.name ?? `Invite-${Date.now()}`;
 
   const expireDate = Math.floor(Date.now() / 1000) + expireHours * 3600;
@@ -28,7 +28,7 @@ export async function generateInviteLink(options?: {
       name,
       member_limit: memberLimit,
       expire_date: expireDate,
-      creates_join_request: false, // langsung join, tidak perlu approve
+      creates_join_request: false,
     }),
   });
 

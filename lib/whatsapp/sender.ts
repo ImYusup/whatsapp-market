@@ -364,3 +364,115 @@ export async function sendText(
     text: message,
   });
 }
+
+// ============================================================
+// SUBSCRIPTION — TEXT (no template)
+// ============================================================
+
+export type InviteMessage = {
+  phone: string;
+  name: string;
+  inviteLink: string;
+};
+
+function formatDateEN(iso: string): string {
+  if (!iso) return "-";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString("en-US", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "Asia/Jakarta",
+  });
+}
+
+/** New subscribe — temporary text (switch to template after Meta approves) */
+export async function sendSubscriptionActivatedInvite(data: InviteMessage) {
+  // After Meta approves, switch to template:
+  // return sendWhatsAppTemplate({
+  //   to: data.phone,
+  //   templateName: WHATSAPP_TEMPLATES.SUBSCRIPTION_ACTIVATED_INVITE,
+  //   languageCode: WHATSAPP_LANGUAGE,
+  //   parameters: [data.name || "Customer", data.inviteLink],
+  // });
+
+  const text = `
+Hello ${data.name || "Customer"},
+
+Your Market Signal subscription is now active ✅
+
+Please join the private Telegram channel using this invitation link (single-use, valid for 48 hours):
+
+${data.inviteLink}
+
+After joining, you will receive market signal updates.
+`.trim();
+
+  return sendWhatsAppText({ to: data.phone, text });
+}
+
+/** Already active */
+export async function sendAlreadyActiveText(data: SubscriptionMessage) {
+  const expired = formatDateEN(data.expiredAt);
+
+  const text = `
+Hello ${data.name || "Customer"},
+
+Your subscription is still active until *${expired}*.
+
+You do not need to subscribe again.
+`.trim();
+
+  return sendWhatsAppText({ to: data.phone, text });
+}
+
+/** Renew success */
+export async function sendRenewedText(data: SubscriptionMessage) {
+  const expired = formatDateEN(data.expiredAt);
+
+  const text = `
+Hello ${data.name || "Customer"},
+
+Renewal successful ✅
+Your subscription is now active until *${expired}*.
+`.trim();
+
+  return sendWhatsAppText({ to: data.phone, text });
+}
+
+/** Status / not found / expired */
+export async function sendStatusText(data: {
+  phone: string;
+  name: string;
+  status: "ACTIVE" | "EXPIRED" | "NOT_SUBSCRIBED";
+  expiredAt?: string | null;
+}) {
+  let text = "";
+
+  if (data.status === "NOT_SUBSCRIBED") {
+    text = `
+Hello ${data.name || "Customer"},
+
+You are not registered yet.
+Type *SUBSCRIBE* to start your Market Signal subscription.
+`.trim();
+  } else if (data.status === "EXPIRED") {
+    text = `
+Hello ${data.name || "Customer"},
+
+Your subscription has *EXPIRED*.
+Type *RENEW* to extend it.
+`.trim();
+  } else {
+    const expired = formatDateEN(data.expiredAt || "");
+    text = `
+Hello ${data.name || "Customer"},
+
+Status: *ACTIVE*
+Valid until: *${expired}*
+`.trim();
+  }
+
+  return sendWhatsAppText({ to: data.phone, text });
+}
