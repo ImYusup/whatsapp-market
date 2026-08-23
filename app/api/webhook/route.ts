@@ -13,8 +13,10 @@ import {
 } from "@/lib/subscription/validator";
 
 import {
-  sendSubscriptionRenewed,
   sendText,
+  sendAlreadyActiveText,
+  sendRenewedText,
+  sendStatusText,
 } from "@/lib/whatsapp/sender";
 
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
@@ -24,32 +26,22 @@ const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 // ============================================================
 
 const SUBSCRIPTION_PAYMENT_MESSAGE = [
-  "Halo! 👋",
+  "Hello! 👋",
   "",
-  "Untuk mendapatkan layanan notifikasi market *Gold (XAU/USD)* dan *Cryptocurrency (BTC/USD)*, silakan subscribe terlebih dahulu.",
+  "To receive *Gold (XAU/USD)* and *Cryptocurrency* market signals, please subscribe first.",
   "",
-  "💳 *SILAKAN LAKUKAN PEMBAYARAN*",
+  "💳 *PLEASE COMPLETE PAYMENT*",
   "",
-  "1. BCA – 7390748013",
-  "   Yusup Juniadi",
+  "1. BCA – 7390748013 : Yusup Juniadi",
+  "2. BRI – 205801004408532 : Yusup Juniadi",
+  "3. SeaBank – 901356079886 : Yusup Juniadi",
+  "4. E-Wallet: DANA/ShopeePay : 081289066999",
   "",
-  "2. BRI – 205801004408532",
-  "   Yusup Juniadi",
-  "",
-  "3. SeaBank – 901356079886",
-  "   Yusup Juniadi",
-  "",
-  "4. E-Wallet: DANA",
-  "   +62 812-8906-6999",
-  "",
-  "────────────────────",
-  "",
-  "📸 Setelah pembayaran, kirim *bukti pembayaran* ke admin.",
-  "",
-  "📞 Konfirmasi pembayaran:",
+  "📸 After payment, send the *payment proof* to admin.",
+  "📞 Payment confirmation:",
   "https://wa.me/6285975149508",
   "",
-  "Setelah pembayaran dikonfirmasi, akun Anda akan diaktifkan dan dapat menerima notifikasi market.",
+  "After payment is confirmed, your account will be activated and you will receive a private Telegram channel invite.",
 ].join("\n");
 
 // ============================================================
@@ -409,9 +401,9 @@ export async function POST(req: NextRequest) {
                   await sendText(
                     normalized.phone,
                     [
-                      "❌ Maaf, terjadi kesalahan.",
+                      "❌ Sorry, something went wrong.",
                       "",
-                      "Silakan coba beberapa saat lagi.",
+                      "Please try again in a moment.",
                     ].join("\n")
                   );
 
@@ -419,7 +411,7 @@ export async function POST(req: NextRequest) {
                     "✅ ERROR MESSAGE SENT"
                   );
                 } catch (
-                  replyError
+                replyError
                 ) {
                   console.error(
                     "❌ ERROR SENDING ERROR MESSAGE:",
@@ -554,87 +546,44 @@ async function handleSubscriptionCommand(
   command: string,
   name = ""
 ) {
-  const action =
-    normalizeAction(command);
+  const action = normalizeAction(command);
 
-  console.log(
-    "📌 SUBSCRIPTION COMMAND:",
-    {
-      phone,
-      name,
-      action,
-    }
-  );
-
-  // ==========================================================
-  // CHECK CURRENT SUBSCRIPTION
-  // ==========================================================
+  console.log("📌 SUBSCRIPTION COMMAND:", { phone, name, action });
 
   let subscriptionStatus;
 
   try {
-    subscriptionStatus =
-      await getSubscriptionStatus(
-        phone
-      );
-
+    subscriptionStatus = await getSubscriptionStatus(phone);
     console.log(
       "📊 CURRENT SUBSCRIPTION STATUS:",
-      JSON.stringify(
-        subscriptionStatus,
-        null,
-        2
-      )
+      JSON.stringify(subscriptionStatus, null, 2)
     );
   } catch (error) {
-    console.error(
-      "❌ FAILED TO CHECK SUBSCRIPTION:",
-      error
-    );
-
+    console.error("❌ FAILED TO CHECK SUBSCRIPTION:", error);
     throw error;
   }
 
-  // ==========================================================
-  // INVALID COMMAND
-  // ==========================================================
+  const displayName =
+    subscriptionStatus.subscriber?.name || name || "Customer";
 
+  // ==========================================================
+  // INVALID / UNKNOWN COMMAND
+  // ==========================================================
   if (!isValidAction(action)) {
-    // --------------------------------------------------------
-    // NEW / NOT SUBSCRIBED USER
-    // --------------------------------------------------------
-
-    if (
-      subscriptionStatus.action ===
-      "NOT_SUBSCRIBED"
-    ) {
-      return sendText(
-        phone,
-        SUBSCRIPTION_PAYMENT_MESSAGE
-      );
+    if (subscriptionStatus.action === "NOT_SUBSCRIBED") {
+      return sendText(phone, SUBSCRIPTION_PAYMENT_MESSAGE);
     }
 
-    // --------------------------------------------------------
-    // EXPIRED USER
-    // --------------------------------------------------------
-
-    if (
-      subscriptionStatus.action ===
-      "EXPIRED"
-    ) {
+    if (subscriptionStatus.action === "EXPIRED") {
       return sendText(
         phone,
         [
-          "⚠️ Subscription Anda telah expired.",
+          "⚠️ Your subscription has expired.",
           "",
-          "Silakan kirim *RENEW* untuk memperpanjang subscription.",
+          "Send *RENEW* to extend your subscription.",
         ].join("\n")
       );
     }
-
-    // --------------------------------------------------------
-    // ACTIVE USER
-    // --------------------------------------------------------
 
     return sendText(
       phone,
@@ -642,8 +591,9 @@ async function handleSubscriptionCommand(
         "❌ Unknown command.",
         "",
         "Available commands:",
-        "STATUS",
-        "RENEW",
+        "• STATUS",
+        "• RENEW",
+        "• SUBSCRIBE",
       ].join("\n")
     );
   }
@@ -651,40 +601,18 @@ async function handleSubscriptionCommand(
   // ==========================================================
   // SUBSCRIBE
   // ==========================================================
-
-  if (
-    action === "SUBSCRIBE"
-  ) {
-    // --------------------------------------------------------
-    // ALREADY ACTIVE
-    // --------------------------------------------------------
-
-    if (
-      subscriptionStatus.action ===
-      "ACTIVE"
-    ) {
-      return sendText(
+  if (action === "SUBSCRIBE") {
+    // Already active
+    if (subscriptionStatus.action === "ACTIVE") {
+      return sendAlreadyActiveText({
         phone,
-        [
-          "✅ Your subscription is already active.",
-          "",
-          `Expired: ${formatDate(
-            subscriptionStatus
-              .subscription
-              ?.expiredAt
-          )}`,
-        ].join("\n")
-      );
+        name: displayName,
+        expiredAt: subscriptionStatus.subscription?.expiredAt || "",
+      });
     }
 
-    // --------------------------------------------------------
-    // EXPIRED
-    // --------------------------------------------------------
-
-    if (
-      subscriptionStatus.action ===
-      "EXPIRED"
-    ) {
+    // Expired → ask to renew
+    if (subscriptionStatus.action === "EXPIRED") {
       return sendText(
         phone,
         [
@@ -695,202 +623,66 @@ async function handleSubscriptionCommand(
       );
     }
 
-    // --------------------------------------------------------
-    // NEW USER
-    //
-    // IMPORTANT:
-    // SUBSCRIBE TIDAK LAGI MEMBUAT SUBSCRIPTION AKTIF.
-    //
-    // Aktivasi dilakukan setelah pembayaran dikonfirmasi
-    // dan data user dimasukkan / diaktifkan secara manual.
-    // --------------------------------------------------------
-
-    return sendText(
-      phone,
-      SUBSCRIPTION_PAYMENT_MESSAGE
-    );
+    // New user → payment instructions (activation is manual after payment)
+    return sendText(phone, SUBSCRIPTION_PAYMENT_MESSAGE);
   }
 
   // ==========================================================
   // STATUS
   // ==========================================================
-
-  if (
-    action === "STATUS"
-  ) {
-    // --------------------------------------------------------
-    // NOT SUBSCRIBED
-    // --------------------------------------------------------
-
-    if (
-      subscriptionStatus.action ===
-      "NOT_SUBSCRIBED"
-    ) {
-      return sendText(
+  if (action === "STATUS") {
+    if (subscriptionStatus.action === "NOT_SUBSCRIBED") {
+      return sendStatusText({
         phone,
-        SUBSCRIPTION_PAYMENT_MESSAGE
-      );
+        name: displayName,
+        status: "NOT_SUBSCRIBED",
+      });
     }
 
-    // --------------------------------------------------------
-    // EXPIRED
-    // --------------------------------------------------------
-
-    if (
-      subscriptionStatus.action ===
-      "EXPIRED"
-    ) {
-      return sendText(
+    if (subscriptionStatus.action === "EXPIRED") {
+      return sendStatusText({
         phone,
-        [
-          "⚠️ SUBSCRIPTION EXPIRED",
-          "",
-          `Name: ${
-            subscriptionStatus
-              .subscriber
-              ?.name || "-"
-          }`,
-          `Expired: ${
-            subscriptionStatus
-              .subscription
-              ?.expiredAt
-              ? formatDate(
-                  subscriptionStatus
-                    .subscription
-                    .expiredAt
-                )
-              : "-"
-          }`,
-          "",
-          "Send *RENEW* to continue your subscription.",
-        ].join("\n")
-      );
+        name: displayName,
+        status: "EXPIRED",
+      });
     }
 
-    // --------------------------------------------------------
     // ACTIVE
-    // --------------------------------------------------------
-
-    return sendText(
+    return sendStatusText({
       phone,
-      [
-        "✅ SUBSCRIPTION ACTIVE",
-        "",
-        `Name: ${
-          subscriptionStatus
-            .subscriber
-            ?.name || "-"
-        }`,
-        `Expired: ${
-          subscriptionStatus
-            .subscription
-            ?.expiredAt
-            ? formatDate(
-                subscriptionStatus
-                  .subscription
-                  .expiredAt
-              )
-            : "-"
-        }`,
-        "",
-        "Send *RENEW* to extend your subscription.",
-      ].join("\n")
-    );
+      name: displayName,
+      status: "ACTIVE",
+      expiredAt: subscriptionStatus.subscription?.expiredAt,
+    });
   }
 
   // ==========================================================
   // RENEW
   // ==========================================================
-
-  if (
-    action === "RENEW"
-  ) {
-    // --------------------------------------------------------
-    // NEW USER / NOT SUBSCRIBED
-    // --------------------------------------------------------
-
-    if (
-      subscriptionStatus.action ===
-      "NOT_SUBSCRIBED"
-    ) {
-      return sendText(
-        phone,
-        SUBSCRIPTION_PAYMENT_MESSAGE
-      );
+  if (action === "RENEW") {
+    if (subscriptionStatus.action === "NOT_SUBSCRIBED") {
+      return sendText(phone, SUBSCRIPTION_PAYMENT_MESSAGE);
     }
 
-    // --------------------------------------------------------
-    // RENEW
-    // --------------------------------------------------------
+    const result = await renew(phone);
 
-    const result =
-      await renew(phone);
-
-    console.log(
-      "RENEW RESULT:",
-      JSON.stringify(
-        result,
-        null,
-        2
-      )
-    );
-
-    // --------------------------------------------------------
-    // SUBSCRIBER NOT FOUND
-    // --------------------------------------------------------
+    console.log("RENEW RESULT:", JSON.stringify(result, null, 2));
 
     if (
-      result.action ===
-      "SUBSCRIBER_NOT_FOUND"
+      result.action === "SUBSCRIBER_NOT_FOUND" ||
+      result.action === "SUBSCRIPTION_NOT_FOUND"
     ) {
-      return sendText(
-        phone,
-        SUBSCRIPTION_PAYMENT_MESSAGE
-      );
+      return sendText(phone, SUBSCRIPTION_PAYMENT_MESSAGE);
     }
 
-    // --------------------------------------------------------
-    // SUBSCRIPTION NOT FOUND
-    // --------------------------------------------------------
-
-    if (
-      result.action ===
-      "SUBSCRIPTION_NOT_FOUND"
-    ) {
-      return sendText(
+    if (result.action === "RENEWED" && result.subscription) {
+      // Text only (no template)
+      return sendRenewedText({
         phone,
-        SUBSCRIPTION_PAYMENT_MESSAGE
-      );
-    }
-
-    // --------------------------------------------------------
-    // RENEWED
-    // --------------------------------------------------------
-
-    if (
-      result.action ===
-        "RENEWED" &&
-      result.subscription
-    ) {
-      await sendSubscriptionRenewed({
-        phone,
-
-        name:
-          result.subscriber
-            ?.name ||
-          "Subscriber",
-
-        expiredAt:
-          result.subscription
-            .expiredAt,
+        name: result.subscriber?.name || displayName,
+        expiredAt: result.subscription.expiredAt,
       });
-
-      return result;
     }
-
-    // --------------------------------------------------------
-    // FALLBACK
-    // --------------------------------------------------------
 
     return sendText(
       phone,
@@ -905,11 +697,7 @@ async function handleSubscriptionCommand(
   // ==========================================================
   // FALLBACK
   // ==========================================================
-
-  return sendText(
-    phone,
-    SUBSCRIPTION_PAYMENT_MESSAGE
-  );
+  return sendText(phone, SUBSCRIPTION_PAYMENT_MESSAGE);
 }
 
 // ============================================================
@@ -922,47 +710,47 @@ function normalizeIncomingMessage(
   const text =
     message.type === "text"
       ? message.text?.body?.trim() ||
-        null
+      null
       : null;
 
   const buttonId =
     message.type ===
-    "interactive"
+      "interactive"
       ? message.interactive
-          ?.button_reply
-          ?.id || null
+        ?.button_reply
+        ?.id || null
       : null;
 
   const buttonTitle =
     message.type ===
-    "interactive"
+      "interactive"
       ? message.interactive
-          ?.button_reply
-          ?.title || null
+        ?.button_reply
+        ?.title || null
       : null;
 
   const listId =
     message.type ===
-    "interactive"
+      "interactive"
       ? message.interactive
-          ?.list_reply
-          ?.id || null
+        ?.list_reply
+        ?.id || null
       : null;
 
   const listTitle =
     message.type ===
-    "interactive"
+      "interactive"
       ? message.interactive
-          ?.list_reply
-          ?.title || null
+        ?.list_reply
+        ?.title || null
       : null;
 
   const listDescription =
     message.type ===
-    "interactive"
+      "interactive"
       ? message.interactive
-          ?.list_reply
-          ?.description || null
+        ?.list_reply
+        ?.description || null
       : null;
 
   return {
