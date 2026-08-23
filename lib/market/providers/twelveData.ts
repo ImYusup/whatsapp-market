@@ -1,3 +1,5 @@
+// lib/market/providers/twelveData.ts
+
 import {
   Candle,
   MarketDataProvider,
@@ -35,6 +37,15 @@ function getSymbol(
 
     case "BTC/USD":
       return "BTC/USD";
+
+      case "ETH/USD":
+      return "ETH/USD";
+
+    case "SOL/USD":
+      return "SOL/USD";
+
+    case "BNB/USD":
+      return "BNB/USD";
 
     default:
       throw new Error(
