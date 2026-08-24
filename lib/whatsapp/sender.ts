@@ -409,7 +409,7 @@ ${data.inviteLink}
 After joining, you will receive market signal updates.
 
 💻 At WebBotPro, we provide digital solutions to help your business grow.
-🌐 webbotpro.com
+🌐 Visit our Website: webbotpro.com
 📲 WhatsApp: wa.me/628597519508
 `.trim();
 
@@ -428,7 +428,7 @@ Your subscription is still active until *${expired}*.
 You do not need to subscribe again.
 
 💻 At WebBotPro, we provide digital solutions to help your business grow.
-🌐 webbotpro.com
+🌐 Visit our Website: webbotpro.com
 📲 WhatsApp: wa.me/628597519508
 `.trim();
 
@@ -446,7 +446,7 @@ Renewal successful ✅
 Your subscription is now active until *${expired}*.
 
 💻 At WebBotPro, we provide digital solutions to help your business grow.
-🌐 webbotpro.com
+🌐 Visit our Website: webbotpro.com
 📲 WhatsApp: wa.me/628597519508
 `.trim();
 
@@ -470,7 +470,7 @@ You are not registered yet.
 Type *SUBSCRIBE* to start your Market Signal subscription.
 
 💻 At WebBotPro, we provide digital solutions to help your business grow.
-🌐 webbotpro.com
+🌐 Visit our Website: webbotpro.com
 📲 WhatsApp: wa.me/628597519508
 `.trim();
   } else if (data.status === "EXPIRED") {
@@ -481,7 +481,7 @@ Your subscription has *EXPIRED*.
 Type *RENEW* to extend it.
 
 💻 At WebBotPro, we provide digital solutions to help your business grow.
-🌐 webbotpro.com
+🌐 Visit our Website: webbotpro.com
 📲 WhatsApp: wa.me/628597519508
 `.trim();
   } else {
@@ -493,7 +493,7 @@ Status: *ACTIVE*
 Valid until: *${expired}*
 
 💻 At WebBotPro, we provide digital solutions to help your business grow.
-🌐 webbotpro.com
+🌐 Visit our Website: webbotpro.com
 📲 WhatsApp: wa.me/628597519508
 `.trim();
   }

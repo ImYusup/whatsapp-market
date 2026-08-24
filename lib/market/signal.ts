@@ -303,79 +303,122 @@ function clusterLevels(
 type SupportResistanceResult = {
   support: number | null;
   resistance: number | null;
-
   supports: number[];
   resistances: number[];
 };
+
+/**
+ * Pastikan selalu ada 3 level.
+ * Kalau pivot kurang, isi dari price dengan step %.
+ */
+function ensureThreeLevels(
+  levels: number[],
+  price: number,
+  type: "support" | "resistance"
+): number[] {
+  const unique = [
+    ...new Set(
+      levels.filter(
+        (n) => Number.isFinite(n) && n > 0
+      )
+    ),
+  ];
+
+  // support: paling dekat price dulu (turun)
+  // resistance: paling dekat price dulu (naik)
+  unique.sort((a, b) =>
+    type === "support" ? b - a : a - b
+  );
+
+  const result = unique.slice(0, 3);
+
+  // Step fallback:
+  // XAU ~0.25–0.40%, crypto juga aman pakai 0.35%
+  const step = 0.0035;
+
+  while (result.length < 3 && Number.isFinite(price) && price > 0) {
+    const last =
+      result.length > 0
+        ? result[result.length - 1]
+        : price;
+
+    const next =
+      type === "resistance"
+        ? Number((last * (1 + step)).toFixed(2))
+        : Number((last * (1 - step)).toFixed(2));
+
+    if (type === "resistance") {
+      if (next > last) result.push(next);
+      else break;
+    } else {
+      if (next < last && next > 0) result.push(next);
+      else break;
+    }
+  }
+
+  // Safety terakhir
+  while (result.length < 3 && Number.isFinite(price) && price > 0) {
+    const i = result.length;
+    const next =
+      type === "resistance"
+        ? Number((price * (1 + step * (i + 1))).toFixed(2))
+        : Number((price * (1 - step * (i + 1))).toFixed(2));
+    result.push(next);
+  }
+
+  return result.slice(0, 3);
+}
 
 function calculateSupportResistance(
   candles: Candle[],
   currentPrice: number
 ): SupportResistanceResult {
-
   if (
     candles.length < 10 ||
     !Number.isFinite(currentPrice)
   ) {
+    const supports = ensureThreeLevels([], currentPrice, "support");
+    const resistances = ensureThreeLevels([], currentPrice, "resistance");
 
     return {
-      support: null,
-      resistance: null,
-      supports: [],
-      resistances: [],
+      support: supports[0] ?? null,
+      resistance: resistances[0] ?? null,
+      supports,
+      resistances,
     };
-
   }
 
-  const pivotLows =
-    findPivotLows(candles);
+  const pivotLows = findPivotLows(candles);
+  const pivotHighs = findPivotHighs(candles);
 
-  const pivotHighs =
-    findPivotHighs(candles);
+  // Gold lebih “rapat” → toleransi cluster sedikit lebih kecil
+  // biar level tidak terlalu sering digabung
+  const supportLevels = clusterLevels(pivotLows, 0.15);
+  const resistanceLevels = clusterLevels(pivotHighs, 0.15);
 
-  const supportLevels =
-    clusterLevels(
-      pivotLows
-    );
+  const rawSupports = supportLevels
+    .filter((level) => level < currentPrice)
+    .sort((a, b) => b - a);
 
-  const resistanceLevels =
-    clusterLevels(
-      pivotHighs
-    );
+  const rawResistances = resistanceLevels
+    .filter((level) => level > currentPrice)
+    .sort((a, b) => a - b);
 
-  const supports =
-    supportLevels
-      .filter(
-        (level) =>
-          level < currentPrice
-      )
-      .sort(
-        (a, b) => b - a
-      )
-      .slice(0, 3);
+  const supports = ensureThreeLevels(
+    rawSupports,
+    currentPrice,
+    "support"
+  );
 
-  const resistances =
-    resistanceLevels
-      .filter(
-        (level) =>
-          level > currentPrice
-      )
-      .sort(
-        (a, b) => a - b
-      )
-      .slice(0, 3);
+  const resistances = ensureThreeLevels(
+    rawResistances,
+    currentPrice,
+    "resistance"
+  );
 
   return {
-    support:
-      supports.length > 0
-        ? supports[0]
-        : null,
-
-    resistance:
-      resistances.length > 0
-        ? resistances[0]
-        : null,
-
+    support: supports[0] ?? null,
+    resistance: resistances[0] ?? null,
     supports,
     resistances,
   };

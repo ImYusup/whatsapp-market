@@ -43,7 +43,7 @@ const SUBSCRIPTION_PAYMENT_MESSAGE = [
   "After payment is confirmed, your account will be activated and you will receive a private Telegram channel invite.",
   "",
   "💻 At WebBotPro, we provide digital solutions to help your business grow.",
-  "🌐 webbotpro.com",
+  "🌐 Visit our Website: webbotpro.com",
 ].join("\n");
 
 // ============================================================
@@ -598,7 +598,7 @@ async function handleSubscriptionCommand(
         "• SUBSCRIBE",
         "",
         "💻 At WebBotPro, we provide digital solutions to help your business grow.",
-        "🌐 webbotpro.com",
+        "🌐 Visit our Website: webbotpro.com",
         "📲 WhatsApp: wa.me/628597519508"
       ].join("\n")
     );
