@@ -16,4 +16,4 @@ export type WhatsAppTemplate =
   (typeof WHATSAPP_TEMPLATES)[keyof typeof WHATSAPP_TEMPLATES];
 
 // Harus sama dengan language template di Meta (en / en_US / id)
-export const WHATSAPP_LANGUAGE = "en_US";
+export const WHATSAPP_LANGUAGE = "en";

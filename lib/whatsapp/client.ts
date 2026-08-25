@@ -138,7 +138,7 @@ export async function sendWhatsAppTemplate(
         language: {
           code:
             message.languageCode ||
-            "en_US",
+            "en",
         },
 
         ...(components
