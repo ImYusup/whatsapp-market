@@ -409,6 +409,7 @@ export async function POST(req: NextRequest) {
     if (action === "SUBSCRIBE") {
       const result = await subscribe(phone, name);
 
+      // Sudah aktif → tidak generate link baru
       if (result.action === "ALREADY_ACTIVE") {
         const notification = await safeNotify(() =>
           sendAlreadyActiveText({
@@ -420,13 +421,25 @@ export async function POST(req: NextRequest) {
         return Response.json({ ...result, notification });
       }
 
-      // SUBSCRIBED → invite link + WA
+      // Baru subscribe → 1 user = 1 invite link
+      let inviteMeta: {
+        inviteLink?: string;
+        expireAtIso?: string | null;
+      } = {};
+
       const notification = await safeNotify(async () => {
         const invite = await generateInviteLink({
           memberLimit: 1,
           expireHours: 48,
-          name: `Sub-${result.subscriber.subscriberId}`,
+          name: `SUB-${result.subscriber.subscriberId}`,
         });
+
+        inviteMeta = {
+          inviteLink: invite.inviteLink,
+          expireAtIso: invite.expireAtIso,
+        };
+
+        console.log("✅ Invite created:", invite.inviteLink);
 
         await sendSubscriptionActivatedInvite({
           phone: result.subscriber.phone,
@@ -435,7 +448,11 @@ export async function POST(req: NextRequest) {
         });
       });
 
-      return Response.json({ ...result, notification });
+      return Response.json({
+        ...result,
+        invite: inviteMeta,
+        notification,
+      });
     }
 
     // ========================================================

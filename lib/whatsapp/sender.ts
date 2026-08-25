@@ -389,31 +389,37 @@ function formatDateEN(iso: string): string {
 
 /** New subscribe — temporary text (switch to template after Meta approves) */
 export async function sendSubscriptionActivatedInvite(data: InviteMessage) {
-  // After Meta approves, switch to template:
-  // return sendWhatsAppTemplate({
-  //   to: data.phone,
-  //   templateName: WHATSAPP_TEMPLATES.SUBSCRIPTION_ACTIVATED_INVITE,
-  //   languageCode: WHATSAPP_LANGUAGE,
-  //   parameters: [data.name || "Customer", data.inviteLink],
-  // });
+  const result = await sendWhatsAppTemplate({
+    to: data.phone,
+    templateName: WHATSAPP_TEMPLATES.SUBSCRIPTION_ACTIVATED_INVITE,
+    languageCode: WHATSAPP_LANGUAGE,
+    parameters: [data.name || "Customer", data.inviteLink],
+  });
 
-  const text = `
-Hello ${data.name || "Customer"},
+  // sesuaikan kalau client-mu return shape beda
+  if (result && (result as { ok?: boolean }).ok === false) {
+    console.error("Template invite failed, fallback text:", result);
 
-Your Market Signal subscription is now active ✅
+    const text = [
+      `Hello ${data.name || "Customer"},`,
+      "",
+      "Your Market Signal subscription is now active ✅",
+      "",
+      "Please join the private Telegram channel using this invitation link (single-use, valid for 48 hours):",
+      "",
+      data.inviteLink,
+      "",
+      "After joining, you will receive market signal updates.",
+      "",
+      "💻 At WebBotPro, we provide digital solutions to help your business grow.",
+      "🌐 Visit our Website: webbotpro.com",
+      "📲 WhatsApp: wa.me/628597519508"
+    ].join("\n");
 
-Please join the private Telegram channel using this invitation link (single-use, valid for 48 hours):
+    return sendWhatsAppText({ to: data.phone, text });
+  }
 
-${data.inviteLink}
-
-After joining, you will receive market signal updates.
-
-💻 At WebBotPro, we provide digital solutions to help your business grow.
-🌐 Visit our Website: webbotpro.com
-📲 WhatsApp: wa.me/628597519508
-`.trim();
-
-  return sendWhatsAppText({ to: data.phone, text });
+  return result;
 }
 
 /** Already active */
