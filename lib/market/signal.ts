@@ -6,6 +6,8 @@ import {
 } from "./types";
 
 import { Market } from "./markets";
+import { getUsdIdrRate } from "@/lib/market/providers/usdIdr";
+import { goldOzToIdrPerGram } from "@/lib/market/goldIdr";
 
 // ============================================================
 // TYPES
@@ -45,6 +47,10 @@ export type SignalResult = {
   confidence: number;
 
   generatedAt: string;
+
+  /** XAU/USD */
+  usdIdr?: number | null;
+  priceIdrPerGram?: number | null;
 };
 
 // ============================================================
@@ -762,74 +768,57 @@ export async function generateSignal(
       price
     );
 
+      // ==========================================================
+  // XAU → IDR per gram (opsional, gagal tidak gagalkan signal)
+  // ==========================================================
+
+  let usdIdr: number | null = null;
+  let priceIdrPerGram: number | null = null;
+
+  if (market === "XAU/USD") {
+    try {
+      usdIdr = await getUsdIdrRate();
+      priceIdrPerGram = goldOzToIdrPerGram(price, usdIdr);
+
+      console.log("[XAU] USD/IDR:", usdIdr, "IDR/gram:", priceIdrPerGram);
+    } catch (e) {
+      console.error("[XAU] USD/IDR failed:", e);
+    }
+  }
+
   // ==========================================================
   // RESULT
   // ==========================================================
 
   return {
-
     market,
 
-    price:
-      roundPrice(
-        price
-      ) as string,
+    price: roundPrice(price) as string,
 
     analysis: {
-
-      "15M":
-        analysis15M,
-
-      "30M":
-        analysis30M,
-
-      "1H":
-        analysis1H,
-
+      "15M": analysis15M,
+      "30M": analysis30M,
+      "1H": analysis1H,
     },
 
     overall,
 
-    support:
-      roundPrice(
-        support
-      ),
+    support: roundPrice(support),
+    resistance: roundPrice(resistance),
 
-    resistance:
-      roundPrice(
-        resistance
-      ),
+    supports: supports
+      .map((level) => roundPrice(level))
+      .filter((value): value is string => value !== null),
 
-    supports:
-      supports
-        .map(
-          (level) =>
-            roundPrice(level)
-        )
-        .filter(
-          (
-            value
-          ): value is string =>
-            value !== null
-        ),
-
-    resistances:
-      resistances
-        .map(
-          (level) =>
-            roundPrice(level)
-        )
-        .filter(
-          (
-            value
-          ): value is string =>
-            value !== null
-        ),
+    resistances: resistances
+      .map((level) => roundPrice(level))
+      .filter((value): value is string => value !== null),
 
     confidence,
 
-    generatedAt:
-      new Date().toISOString(),
+    generatedAt: new Date().toISOString(),
 
+    usdIdr,
+    priceIdrPerGram,
   };
-}
+} 
