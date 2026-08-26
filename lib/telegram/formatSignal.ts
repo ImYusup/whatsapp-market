@@ -60,7 +60,7 @@ function buildPriceBlock(signal: Signal): string {
     lines.push(
       "",
       `<b>Price (gram)</b>`,
-      `≈ ${formatIdr(Number(signal.priceIdrPerGram))} / gram <i>(indikatif)</i>`
+      `≈ ${formatIdr(Number(signal.priceIdrPerGram))}/gram`
     );
 
     if (signal.usdIdr != null && Number.isFinite(Number(signal.usdIdr))) {
