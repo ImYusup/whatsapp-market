@@ -21,43 +21,97 @@ export type Signal = {
   resistances?: (string | number | null)[] | null;
   confidence?: number | string | null;
   generatedAt?: string | null;
+
+  /** XAU only — dari generateSignal */
+  usdIdr?: number | null;
+  priceIdrPerGram?: number | null;
 };
+
+function formatOz(value: string | number): string {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return String(value);
+  return n.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+function formatIdr(value: number): string {
+  if (!Number.isFinite(value)) return "-";
+  return "Rp " + Math.round(value).toLocaleString("id-ID");
+}
+
+function buildPriceBlock(signal: Signal): string {
+  const isGold = signal.market === "XAU/USD";
+
+  if (!isGold) {
+    return `<b>Price:</b> ${signal.price}`;
+  }
+
+  const lines = [
+    `<b>Price (oz)</b>`,
+    `${formatOz(signal.price)} USD/oz`,
+  ];
+
+  if (
+    signal.priceIdrPerGram != null &&
+    Number.isFinite(Number(signal.priceIdrPerGram))
+  ) {
+    lines.push(
+      "",
+      `<b>Price (gram)</b>`,
+      `≈ ${formatIdr(Number(signal.priceIdrPerGram))} / gram <i>(indikatif)</i>`
+    );
+
+    if (signal.usdIdr != null && Number.isFinite(Number(signal.usdIdr))) {
+      lines.push(
+        `(USD/IDR ${Math.round(Number(signal.usdIdr)).toLocaleString("id-ID")})`
+      );
+    }
+  }
+
+  return lines.join("\n");
+}
 
 export function formatSignalMessage(signal: Signal): string {
   const dir = (value?: string | null) => value || "-";
 
-  const emoji =
-    signal.overall?.includes("STRONG BUY") ? "🚀" :
-      signal.overall?.includes("BUY") ? "🟢" :
-        signal.overall?.includes("STRONG SELL") ? "🔻" :
-          signal.overall?.includes("SELL") ? "🔴" : "⚪";
+  const emoji = signal.overall?.includes("STRONG BUY")
+    ? "🚀"
+    : signal.overall?.includes("BUY")
+      ? "🟢"
+      : signal.overall?.includes("STRONG SELL")
+        ? "🔻"
+        : signal.overall?.includes("SELL")
+          ? "🔴"
+          : "⚪";
 
   const analysis = signal.analysis || {};
 
   const supports = signal.supports?.length
     ? signal.supports
-      .filter((s) => s != null)
-      .map((s, i) => `S${i + 1}: ${s}`)
-      .join("\n")
+        .filter((s) => s != null)
+        .map((s, i) => `S${i + 1}: ${s}`)
+        .join("\n")
     : `S1: ${signal.support ?? "-"}`;
 
   const resistances = signal.resistances?.length
     ? signal.resistances
-      .filter((r) => r != null)
-      .map((r, i) => `R${i + 1}: ${r}`)
-      .join("\n")
+        .filter((r) => r != null)
+        .map((r, i) => `R${i + 1}: ${r}`)
+        .join("\n")
     : `R1: ${signal.resistance ?? "-"}`;
 
   const time = signal.generatedAt
     ? new Date(signal.generatedAt).toLocaleString("id-ID", {
-      timeZone: "Asia/Jakarta",
-    })
+        timeZone: "Asia/Jakarta",
+      })
     : new Date().toLocaleString("id-ID", { timeZone: "Asia/Jakarta" });
 
   return `
 ${emoji} <b>${signal.market}</b>
 
-<b>Price:</b> ${signal.price}
+${buildPriceBlock(signal)}
 <b>Overall:</b> ${signal.overall || "-"}
 <b>Confidence:</b> ${signal.confidence ?? 0}%
 
