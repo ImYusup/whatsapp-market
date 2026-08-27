@@ -100,7 +100,7 @@ export async function GET(request: Request) {
       // Delay antar market (aman untuk free tier)
       if (i < CRYPTO_MARKETS.length - 1) {
         console.log(`⏳ Waiting 20 seconds...`);
-        await sleep(20_000);
+        await sleep(35_000);
       }
     }
 

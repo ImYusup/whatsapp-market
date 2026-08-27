@@ -257,7 +257,7 @@ function clusterLevels(
 
     const lastCluster =
       clusters[
-        clusters.length - 1
+      clusters.length - 1
       ];
 
     if (!lastCluster) {
@@ -267,15 +267,15 @@ function clusterLevels(
 
     const reference =
       lastCluster[
-        lastCluster.length - 1
+      lastCluster.length - 1
       ];
 
     const differencePercent =
       reference !== 0
         ? Math.abs(
-            (level - reference) /
-              reference
-          ) * 100
+          (level - reference) /
+          reference
+        ) * 100
         : 0;
 
     if (
@@ -487,7 +487,7 @@ function calculateConfidence(
         analysis.score
       ) *
       weights[
-        analysis.timeframe
+      analysis.timeframe
       ];
   }
 
@@ -655,57 +655,34 @@ export async function generateSignal(
   );
 
   // ==========================================================
-  // OHLC
+  // OHLC — sequential (hindari burst 429 per menit)
   // ==========================================================
 
-  const [
-    candles15M,
-    candles30M,
-    candles1H,
-  ] = await Promise.all([
+  function sleep(ms: number) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
 
-    provider.getCandles(
-      market,
-      "15min"
-    ),
+  const candles15M = await provider.getCandles(market, "15min");
+  await sleep(1500);
 
-    provider.getCandles(
-      market,
-      "30min"
-    ),
+  const candles30M = await provider.getCandles(market, "30min");
+  await sleep(1500);
 
-    provider.getCandles(
-      market,
-      "1h"
-    ),
-
-  ]);
+  const candles1H = await provider.getCandles(market, "1h");
 
   if (
     candles15M.length < 6 ||
     candles30M.length < 6 ||
     candles1H.length < 10
   ) {
-
-    throw new Error(
-      `${market} insufficient OHLC data`
-    );
-
+    throw new Error(`${market} insufficient OHLC data`);
   }
 
-  console.log(
-    `${market} OHLC loaded`,
-    {
-      "15M":
-        candles15M.length,
-
-      "30M":
-        candles30M.length,
-
-      "1H":
-        candles1H.length,
-    }
-  );
+  console.log(`${market} OHLC loaded`, {
+    "15M": candles15M.length,
+    "30M": candles30M.length,
+    "1H": candles1H.length,
+  });
 
   // ==========================================================
   // ANALYSIS
@@ -768,7 +745,7 @@ export async function generateSignal(
       price
     );
 
-      // ==========================================================
+  // ==========================================================
   // XAU → IDR per gram (opsional, gagal tidak gagalkan signal)
   // ==========================================================
 
