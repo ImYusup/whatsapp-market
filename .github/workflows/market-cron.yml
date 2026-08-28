@@ -2,14 +2,13 @@ name: Market Notification Cron
 
 on:
   schedule:
-    # Setiap 15 menit
-    - cron: "0,15,30,45 * * * *"     # XAU
-    - cron: "2,17,32,47 * * * *"     # BTC (selisih 2 menit biar tidak bentrok)
+    # Setiap 15 menit (UTC)
+    - cron: "0,15,30,45 * * * *"   # XAU
+    - cron: "2,17,32,47 * * * *"   # BTC
 
-  workflow_dispatch:  # biar bisa trigger manual dari GitHub
+  workflow_dispatch:
 
 jobs:
-  # ==================== XAU ====================
   xau-market-cron:
     runs-on: ubuntu-latest
     steps:
@@ -18,20 +17,33 @@ jobs:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
           if [ -z "$CRON_SECRET" ]; then
-            echo "❌ GitHub CRON_SECRET KOSONG"
+            echo "❌ CRON_SECRET KOSONG"
             exit 1
           fi
-          echo "✅ CRON_SECRET tersedia"
+          echo "✅ CRON_SECRET tersedia (length: ${#CRON_SECRET})"
 
       - name: Trigger XAU/USD
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
-          curl -f -X GET \
+          echo "Triggering XAU..."
+          HTTP_CODE=$(curl -s -o /tmp/xau_response.json -w "%{http_code}" \
+            -X GET \
             -H "Authorization: Bearer $CRON_SECRET" \
-            "https://whatsapp-market.vercel.app/api/cron/market/xau"
+            "https://whatsapp-market.vercel.app/api/cron/market/xau")
 
-  # ==================== BTC (Crypto) ====================
+          echo "HTTP Status: $HTTP_CODE"
+          echo "Response body:"
+          cat /tmp/xau_response.json
+          echo ""
+
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "❌ XAU failed with HTTP $HTTP_CODE"
+            exit 1
+          fi
+
+          echo "✅ XAU success"
+
   btc-market-cron:
     runs-on: ubuntu-latest
     steps:
@@ -40,15 +52,29 @@ jobs:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
           if [ -z "$CRON_SECRET" ]; then
-            echo "❌ GitHub CRON_SECRET KOSONG"
+            echo "❌ CRON_SECRET KOSONG"
             exit 1
           fi
-          echo "✅ CRON_SECRET tersedia"
+          echo "✅ CRON_SECRET tersedia (length: ${#CRON_SECRET})"
 
       - name: Trigger BTC/Crypto
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
-          curl -f -X GET \
+          echo "Triggering BTC/Crypto..."
+          HTTP_CODE=$(curl -s -o /tmp/btc_response.json -w "%{http_code}" \
+            -X GET \
             -H "Authorization: Bearer $CRON_SECRET" \
-            "https://whatsapp-market.vercel.app/api/cron/market/btc"
+            "https://whatsapp-market.vercel.app/api/cron/market/btc")
+
+          echo "HTTP Status: $HTTP_CODE"
+          echo "Response body:"
+          cat /tmp/btc_response.json
+          echo ""
+
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "❌ BTC failed with HTTP $HTTP_CODE"
+            exit 1
+          fi
+
+          echo "✅ BTC success"
