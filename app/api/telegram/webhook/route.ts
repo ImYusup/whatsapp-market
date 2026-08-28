@@ -1,6 +1,7 @@
 // app/api/telegram/webhook/route.ts
 
 import { NextRequest, NextResponse } from "next/server";
+import { google } from "googleapis";
 import { sendTelegramMessage } from "@/lib/telegram/bot";
 import { MSG } from "@/lib/telegram/commands-text";
 import { formatSignalTelegram, formatTfSummary } from "@/lib/telegram/format";
@@ -10,10 +11,80 @@ import { isActiveTelegramUser } from "@/lib/telegram/access";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+// ============================================================
+// SHEET: save telegram_user_id saat user join channel
+// ============================================================
+
+async function saveTelegramUserId(
+  subscriberId: string,
+  telegramUserId: string,
+  inviteLinkName: string
+) {
+  const email = process.env.GOOGLE_CLIENT_EMAIL;
+  const key = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, "\n");
+  const sheetId = process.env.GOOGLE_SHEET_ID;
+
+  if (!email || !key || !sheetId) {
+    console.error("[TG] Google Sheets env missing");
+    return;
+  }
+
+  const auth = new google.auth.JWT({
+    email,
+    key,
+    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+  });
+
+  const sheets = google.sheets({ version: "v4", auth });
+
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: sheetId,
+    range: "Subscribers!A:H",
+  });
+
+  const rows = res.data.values || [];
+  if (rows.length <= 1) return;
+
+  for (let i = 1; i < rows.length; i++) {
+    const rowSubscriberId = rows[i][0] || "";
+
+    if (rowSubscriberId === subscriberId) {
+      const rowNumber = i + 1;
+
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: sheetId,
+        range: `Subscribers!F${rowNumber}:H${rowNumber}`,
+        valueInputOption: "USER_ENTERED",
+        requestBody: {
+          values: [
+            [
+              telegramUserId,           // F: telegram_user_id
+              inviteLinkName,           // G: invite_link_name
+              new Date().toISOString(), // H: joined_at
+            ],
+          ],
+        },
+      });
+
+      console.log("✅ telegram_user_id saved:", {
+        subscriberId,
+        telegramUserId,
+        rowNumber,
+      });
+      return;
+    }
+  }
+
+  console.warn("[TG] subscriberId not found in sheet:", subscriberId);
+}
+
+// ============================================================
+// COMMAND HELPERS
+// ============================================================
+
 function parseCommand(text: string): { cmd: string; args: string } {
   const raw = (text || "").trim();
   const withoutSlash = raw.startsWith("/") ? raw.slice(1) : raw;
-  // /gold@YourBotName → gold
   const [head, ...rest] = withoutSlash.split(/\s+/);
   const cmd = (head || "").split("@")[0].toLowerCase();
   return { cmd, args: rest.join(" ") };
@@ -37,9 +108,64 @@ async function sendMarket(chatId: number, market: string) {
   await sendTelegramMessage(chatId, formatSignalTelegram(signal));
 }
 
+// ============================================================
+// POST webhook
+// ============================================================
+
 export async function POST(req: NextRequest) {
   try {
     const update = await req.json();
+
+    // ========================================================
+    // 1) CHANNEL JOIN EVENT (chat_member)
+    // ========================================================
+    const chatMember = update.chat_member;
+
+    if (chatMember) {
+      const newMember = chatMember.new_chat_member;
+      const oldMember = chatMember.old_chat_member;
+
+      const newStatus = newMember?.status;
+      const oldStatus = oldMember?.status;
+      const userId = newMember?.user?.id;
+      const inviteName = chatMember.invite_link?.name || "";
+
+      console.log("[TG] chat_member update:", {
+        userId,
+        oldStatus,
+        newStatus,
+        inviteName,
+      });
+
+      // User baru join
+      if (
+        userId &&
+        (newStatus === "member" || newStatus === "administrator") &&
+        oldStatus !== "member" &&
+        oldStatus !== "administrator"
+      ) {
+        // Format invite name dari subscription API: SUB-{subscriberId}
+        if (inviteName.startsWith("SUB-")) {
+          const subscriberId = inviteName.replace(/^SUB-/, "");
+          await saveTelegramUserId(
+            subscriberId,
+            String(userId),
+            inviteName
+          );
+        } else {
+          console.warn(
+            "[TG] join without matching invite name:",
+            inviteName
+          );
+        }
+      }
+
+      return NextResponse.json({ ok: true });
+    }
+
+    // ========================================================
+    // 2) PRIVATE MESSAGE / COMMANDS
+    // ========================================================
     const message = update.message || update.edited_message;
 
     if (!message?.chat?.id || !message.text) {
@@ -70,7 +196,6 @@ export async function POST(req: NextRequest) {
         break;
 
       case "status": {
-        // TODO: real status from Sheet
         const active = await isActiveTelegramUser(userId);
         await sendTelegramMessage(
           chatId,
@@ -136,18 +261,16 @@ export async function POST(req: NextRequest) {
       }
 
       default:
-        // ignore non-commands / unknown
         break;
     }
 
     return NextResponse.json({ ok: true });
   } catch (error) {
     console.error("[TG] webhook error:", error);
-    return NextResponse.json({ ok: true }); // always 200 biar Telegram tidak retry agresif
+    return NextResponse.json({ ok: true });
   }
 }
 
-// Optional: GET health
 export async function GET() {
   return NextResponse.json({ ok: true, service: "telegram-webhook" });
 }
