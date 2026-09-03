@@ -437,41 +437,40 @@ function calculateSupportResistance(
 function calculateOverall(
   analyses: TimeframeAnalysis[]
 ): Direction {
+  const score = analyses.reduce((total, item) => total + item.score, 0);
 
-  const score =
-    analyses.reduce(
-      (total, item) =>
-        total + item.score,
-      0
-    );
+  const analysis15 = analyses.find(a => a.timeframe === "15M");
+  const analysis30 = analyses.find(a => a.timeframe === "30M");
+  const analysis1H = analyses.find(a => a.timeframe === "1H");
 
-  if (score >= 4) {
-    return "STRONG BUY";
+  // Deteksi konflik keras antara short-term vs 1H
+  const shortScore = (analysis15?.score ?? 0) + (analysis30?.score ?? 0);
+  const longScore = analysis1H?.score ?? 0;
+
+  const strongConflict =
+    (shortScore <= -2 && longScore >= 2) ||
+    (shortScore >= 2 && longScore <= -2);
+
+  // Kalau konflik keras → paksa WAIT (lebih aman)
+  if (strongConflict) {
+    return "WAIT";
   }
 
-  if (score >= 2) {
-    return "BUY";
-  }
-
-  if (score <= -4) {
-    return "STRONG SELL";
-  }
-
-  if (score <= -2) {
-    return "SELL";
-  }
+  if (score >= 4) return "STRONG BUY";
+  if (score >= 2) return "BUY";
+  if (score <= -4) return "STRONG SELL";
+  if (score <= -2) return "SELL";
 
   return "WAIT";
 }
 
 // ============================================================
-// CONFIDENCE
+// CONFIDENCE (versi lebih ketat)
 // ============================================================
 
 function calculateConfidence(
   analyses: TimeframeAnalysis[]
 ): number {
-
   const weights = {
     "15M": 0.25,
     "30M": 0.30,
@@ -481,140 +480,78 @@ function calculateConfidence(
   let weightedStrength = 0;
 
   for (const analysis of analyses) {
-
-    weightedStrength +=
-      Math.abs(
-        analysis.score
-      ) *
-      weights[
-      analysis.timeframe
-      ];
+    weightedStrength += Math.abs(analysis.score) * weights[analysis.timeframe];
   }
 
-  let confidence =
-    (weightedStrength / 2) * 100;
+  // Base confidence dari strength
+  let confidence = (weightedStrength / 2) * 100;
 
-  const positive =
-    analyses.filter(
-      (item) =>
-        item.score > 0
-    ).length;
+  const positive = analyses.filter(a => a.score > 0).length;
+  const negative = analyses.filter(a => a.score < 0).length;
+  const wait = analyses.filter(a => a.score === 0).length;
 
-  const negative =
-    analyses.filter(
-      (item) =>
-        item.score < 0
-    ).length;
-
-  const wait =
-    analyses.filter(
-      (item) =>
-        item.score === 0
-    ).length;
-
-  if (
-    positive === 3 ||
-    negative === 3
-  ) {
-
-    confidence += 12;
-
-  } else if (
-    positive === 2 ||
-    negative === 2
-  ) {
-
-    confidence += 6;
-
+  // Semua timeframe searah
+  if (positive === 3 || negative === 3) {
+    confidence += 15;
+  } else if (positive === 2 || negative === 2) {
+    confidence += 7;
   }
 
-  if (
-    positive > 0 &&
-    negative > 0
-  ) {
+  // Ada konflik arah
+  if (positive > 0 && negative > 0) {
+    confidence -= 22; // hukuman lebih berat dari sebelumnya
 
-    confidence -= 18;
-
-    const oneHour =
-      analyses.find(
-        (item) =>
-          item.timeframe === "1H"
-      );
-
+    const oneHour = analyses.find(a => a.timeframe === "1H");
     if (oneHour) {
+      const shortTermScore = analyses
+        .filter(a => a.timeframe !== "1H")
+        .reduce((sum, a) => sum + a.score, 0);
 
-      const shortTermScore =
-        analyses
-          .filter(
-            (item) =>
-              item.timeframe !== "1H"
-          )
-          .reduce(
-            (sum, item) =>
-              sum + item.score,
-            0
-          );
-
+      // Konflik short vs 1H → hukuman tambahan
       if (
-        shortTermScore > 0 &&
-        oneHour.score < 0
+        (shortTermScore > 0 && oneHour.score < 0) ||
+        (shortTermScore < 0 && oneHour.score > 0)
       ) {
-
-        confidence -= 8;
-
-      }
-
-      if (
-        shortTermScore < 0 &&
-        oneHour.score > 0
-      ) {
-
-        confidence -= 8;
-
+        confidence -= 12;
       }
     }
   }
 
-  confidence -=
-    wait * 8;
+  // Banyak WAIT → confidence turun
+  confidence -= wait * 10;
 
-  const strongCount =
-    analyses.filter(
-      (item) =>
-        Math.abs(
-          item.score
-        ) === 2
-    ).length;
+  // Bonus strong signal
+  const strongCount = analyses.filter(a => Math.abs(a.score) === 2).length;
+  confidence += strongCount * 4;
 
-  confidence +=
-    strongCount * 3;
-
-  const oneHour =
-    analyses.find(
-      (item) =>
-        item.timeframe === "1H"
-    );
-
-  if (
-    oneHour &&
-    Math.abs(
-      oneHour.score
-    ) === 2
-  ) {
-
-    confidence += 4;
-
+  // Bonus khusus kalau 1H strong
+  const oneHour = analyses.find(a => a.timeframe === "1H");
+  if (oneHour && Math.abs(oneHour.score) === 2) {
+    confidence += 5;
   }
 
-  return Math.max(
-    0,
-    Math.min(
-      Math.round(
-        confidence
-      ),
-      95
-    )
-  );
+  // === Aturan penting baru ===
+  // Kalau overall nanti jadi WAIT, confidence tidak boleh terlalu tinggi
+  const rawScore = analyses.reduce((s, a) => s + a.score, 0);
+  if (Math.abs(rawScore) < 2) {
+    // Overall akan WAIT → cap confidence
+    confidence = Math.min(confidence, 48);
+  }
+
+  // Konflik keras → cap lebih rendah lagi
+  const shortScore =
+    (analyses.find(a => a.timeframe === "15M")?.score ?? 0) +
+    (analyses.find(a => a.timeframe === "30M")?.score ?? 0);
+  const longScore = analyses.find(a => a.timeframe === "1H")?.score ?? 0;
+
+  if (
+    (shortScore <= -2 && longScore >= 2) ||
+    (shortScore >= 2 && longScore <= -2)
+  ) {
+    confidence = Math.min(confidence, 35);
+  }
+
+  return Math.max(0, Math.min(Math.round(confidence), 95));
 }
 
 // ============================================================

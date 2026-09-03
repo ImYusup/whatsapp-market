@@ -76,36 +76,38 @@ function buildPriceBlock(signal: Signal): string {
 export function formatSignalMessage(signal: Signal): string {
   const dir = (value?: string | null) => value || "-";
 
-  const emoji = signal.overall?.includes("STRONG BUY")
-    ? "🚀"
-    : signal.overall?.includes("BUY")
-      ? "🟢"
-      : signal.overall?.includes("STRONG SELL")
+  const overallDisplay =
+    signal.overall === "WAIT"
+      ? "WAIT & SEE"
+      : signal.overall || "-";
+
+  const emoji =
+    signal.overall?.includes("BUY")
+      ? "🚀"
+      : signal.overall?.includes("SELL")
         ? "🔻"
-        : signal.overall?.includes("SELL")
-          ? "🔴"
-          : "⚪";
+        : "👀";
 
   const analysis = signal.analysis || {};
 
   const supports = signal.supports?.length
     ? signal.supports
-        .filter((s) => s != null)
-        .map((s, i) => `S${i + 1}: ${s}`)
-        .join("\n")
+      .filter((s) => s != null)
+      .map((s, i) => `S${i + 1}: ${s}`)
+      .join("\n")
     : `S1: ${signal.support ?? "-"}`;
 
   const resistances = signal.resistances?.length
     ? signal.resistances
-        .filter((r) => r != null)
-        .map((r, i) => `R${i + 1}: ${r}`)
-        .join("\n")
+      .filter((r) => r != null)
+      .map((r, i) => `R${i + 1}: ${r}`)
+      .join("\n")
     : `R1: ${signal.resistance ?? "-"}`;
 
   const time = signal.generatedAt
     ? new Date(signal.generatedAt).toLocaleString("id-ID", {
-        timeZone: "Asia/Jakarta",
-      })
+      timeZone: "Asia/Jakarta",
+    })
     : new Date().toLocaleString("id-ID", { timeZone: "Asia/Jakarta" });
 
   return `
